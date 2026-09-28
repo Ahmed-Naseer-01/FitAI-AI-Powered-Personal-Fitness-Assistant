@@ -217,3 +217,82 @@ describe('response parsing robustness', () => {
     })
   })
 })
+
+describe('transient failure handling', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  function status(code: number) {
+    return { ok: false, status: code, json: async () => ({}) }
+  }
+
+  it('retries a 503 and succeeds on a later attempt', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(status(503))
+      .mockResolvedValueOnce(geminiReply('{"answer": 9}'))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toEqual({
+      answer: 9,
+    })
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  }, 15000)
+
+  it('retries a 429 rate limit', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(status(429))
+      .mockResolvedValueOnce(geminiReply('{"answer": 3}'))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toEqual({
+      answer: 3,
+    })
+  }, 15000)
+
+  it('does NOT retry a 403, which will never succeed', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'bad-key')
+    const fetchSpy = vi.fn().mockResolvedValue(status(403))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toBeNull()
+    // One call per callOnce, and generateStructured retries the transport
+    // path once — but never the three-attempt backoff loop.
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a 404 model-not-found', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    const fetchSpy = vi.fn().mockResolvedValue(status(404))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toBeNull()
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('gives up after exhausting the backoff on persistent overload', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    const fetchSpy = vi.fn().mockResolvedValue(status(503))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toBeNull()
+    // 3 attempts per callOnce, and callOnce is invoked twice.
+    expect(fetchSpy).toHaveBeenCalledTimes(6)
+  }, 20000)
+
+  it('honours GEMINI_MODEL when set', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    vi.stubEnv('GEMINI_MODEL', 'gemini-3.5-flash-lite')
+    const fetchSpy = vi.fn().mockResolvedValue(geminiReply('{"answer": 1}'))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('gemini-3.5-flash-lite')
+  })
+})

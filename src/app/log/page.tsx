@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
 import { requireUserId } from '@/lib/session'
 import { getProfileWithMetrics } from '@/lib/profile'
+import { isAiEnabled } from '@/lib/ai/client'
 import { buildDaySummary, getDayLogs } from '@/lib/foodLog'
 import { MEAL_SLOTS, type MealSlot } from '@/lib/types'
 import DailySummary from '@/components/DailySummary'
 import FoodSearch from '@/components/FoodSearch'
+import NaturalLanguageEntry from '@/components/NaturalLanguageEntry'
 import LogRowItem from '@/components/LogRowItem'
 
 const SLOT_LABEL: Record<MealSlot, string> = {
@@ -37,6 +39,7 @@ export default async function LogPage() {
 
       <DailySummary summary={summary} />
       <FoodSearch />
+      <NaturalLanguageEntry aiEnabled={isAiEnabled()} />
 
       {MEAL_SLOTS.map((slot) => (
         <section key={slot}>

@@ -9,8 +9,21 @@ import type { ZodType } from 'zod'
 export type JsonSchema = Record<string, unknown>
 
 // Verified available 2026-09. Older 2.x models are refused for new API keys.
-const MODEL = 'gemini-3.8-flash'
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
+// Override with GEMINI_MODEL in .env to switch without a code change.
+const DEFAULT_MODEL = 'gemini-3.8-flash'
+
+// Free-tier flash models are frequently overloaded. A transient 503 or 429
+// deserves a short wait and another try, not an immediate drop to the
+// deterministic fallback.
+const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504])
+const BACKOFF_MS = [600, 1800]
+
+function endpoint(): string {
+  const model = (process.env.GEMINI_MODEL ?? '').trim() || DEFAULT_MODEL
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export function isAiEnabled(): boolean {
   return (process.env.GEMINI_API_KEY ?? '').trim().length > 0
@@ -24,14 +37,38 @@ type Args<T> = {
   retryPrompt?: (problem: string) => string
 }
 
-/** One request. Returns parsed JSON, or null for any failure at all. */
+/**
+ * One logical request, retried on transient overload.
+ * Returns parsed JSON, or null for any failure at all.
+ */
 async function callOnce(prompt: string, jsonSchema: JsonSchema): Promise<unknown | null> {
   const key = (process.env.GEMINI_API_KEY ?? '').trim()
 
+  for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt += 1) {
+    const outcome = await attemptCall(key, prompt, jsonSchema)
+    if (outcome.kind === 'ok') return outcome.value
+    if (outcome.kind === 'fatal') return null
+    // transient: wait and try again, unless that was the last attempt
+    if (attempt < BACKOFF_MS.length) await sleep(BACKOFF_MS[attempt])
+  }
+
+  return null
+}
+
+type Outcome =
+  | { kind: 'ok'; value: unknown }
+  | { kind: 'fatal' }
+  | { kind: 'transient' }
+
+async function attemptCall(
+  key: string,
+  prompt: string,
+  jsonSchema: JsonSchema,
+): Promise<Outcome> {
   let response: Response
   try {
     // The key goes in the query string, never the body.
-    response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(key)}`, {
+    response = await fetch(`${endpoint()}?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -46,10 +83,13 @@ async function callOnce(prompt: string, jsonSchema: JsonSchema): Promise<unknown
       }),
     })
   } catch {
-    return null // network failure, DNS, timeout
+    return { kind: 'transient' } // network blip, DNS, timeout
   }
 
-  if (!response.ok) return null // rate limit, bad key, provider outage
+  if (!response.ok) {
+    // 400 bad request and 403 bad key will never succeed; overload might.
+    return TRANSIENT_STATUSES.has(response.status) ? { kind: 'transient' } : { kind: 'fatal' }
+  }
 
   try {
     const body = await response.json()
@@ -61,10 +101,10 @@ async function callOnce(prompt: string, jsonSchema: JsonSchema): Promise<unknown
       .map((p) => (p as { text?: unknown })?.text)
       .find((t): t is string => typeof t === 'string' && t.trim().length > 0)
 
-    if (text === undefined) return null
-    return JSON.parse(text)
+    if (text === undefined) return { kind: 'fatal' }
+    return { kind: 'ok', value: JSON.parse(text) }
   } catch {
-    return null // malformed body, or text that is not JSON
+    return { kind: 'fatal' } // malformed body, or text that is not JSON
   }
 }
 
