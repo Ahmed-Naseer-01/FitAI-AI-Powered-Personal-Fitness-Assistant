@@ -1,36 +1,152 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FitAI — AI-Powered Personal Fitness Assistant
 
-## Getting Started
+An academic final-year project: a web application combining a fitness profile
+with deterministic health metrics, AI-generated diet and workout plans, a
+calorie tracker, a progress dashboard, and real-time exercise form analysis
+through the webcam.
 
-First, run the development server:
+## Governing principle
+
+> **AI selects and explains. Deterministic code calculates.**
+
+The language model never produces a number the system depends on. It returns
+database IDs and quantities; application code performs all arithmetic against
+structured nutrition and exercise data. Every AI response is schema-validated,
+and every AI feature has a deterministic fallback — **the application generates
+diet and workout plans with no API key at all.**
+
+A worked example of why this matters: a vegetarian user's food menu is filtered
+by SQL *before* the prompt is built, dropping 60 foods to 31. The model cannot
+recommend chicken because chicken was never in its input. That is a structural
+guarantee, not a matter of the prompt being obeyed.
+
+## Features
+
+| Module | Description |
+|---|---|
+| Profile & assessment | BMI, BMR (Mifflin–St Jeor), TDEE, calorie and protein targets |
+| AI diet planner | Meals chosen from a 60-item Pakistani/South Asian food database |
+| Calorie tracker | Search, log, edit; optional natural-language entry |
+| AI workout planner | Weekly schedule validated for duration and recovery |
+| Form analysis | In-browser pose detection for squat and bicep curl |
+| Progress dashboard | Weight, calories, workouts and form score over 7 or 30 days |
+
+## Technology
+
+Next.js 16 (App Router, TypeScript) · Prisma 6 + SQLite · Tailwind CSS v4 ·
+Zod · Recharts · MediaPipe Tasks JS · Google Gemini API · Vitest
+
+**Privacy:** webcam frames are processed entirely in the browser and never
+leave the device. Only aggregate rep counts and form scores are transmitted.
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env          # then set SESSION_SECRET
+npm run setup:model           # downloads the MediaPipe pose model (~5.5 MB)
+npm run db:push
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Generate a session secret with `openssl rand -base64 32`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Optional: enable the AI features
 
-## Learn More
+Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
+and add it to `.env`:
 
-To learn more about Next.js, take a look at the following resources:
+```
+GEMINI_API_KEY=your-key-here
+GEMINI_MODEL=              # optional, overrides the default model
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Without a key the application still works: diet and workout plans come from
+the deterministic fallback generators. Only natural-language food entry
+requires a key.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Demo account
 
-## Deploy on Vercel
+```bash
+npm run db:demo
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Creates `demo@fitai.test` / `demo1234` with two weeks of history, including
+three deliberately unlogged days so the charts demonstrate gaps rather than
+zeros.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Testing
+
+```bash
+npm test
+```
+
+Unit tests cover all health and nutrition arithmetic, the AI validators and
+fallback generators, and the pose geometry and rep-counting state machine.
+
+`src/lib/pose/pipeline.test.ts` simulates the whole camera pipeline —
+visibility gate, joint angles, smoothing, rep counting, form rules — against
+synthetic landmarks, so **rep counting and form classification are verified
+without a camera**, including the case where the user walks out of frame
+mid-set.
+
+## How the form analysis works
+
+```
+webcam → MediaPipe PoseLandmarker → 33 landmarks
+  → visibility gate → joint angles → EMA smoothing (α = 0.3)
+  → rep state machine (hysteresis) → form rules → live feedback
+```
+
+A repetition is counted only on a bottom→top transition, and the gap between
+the two thresholds prevents a hovering angle from producing phantom reps.
+
+| Exercise | Rep signal | Count thresholds | Form checks |
+|---|---|---|---|
+| Squat | Hip–knee–ankle angle | below 120°, then above 160° | depth (>100°), torso lean (>45°), knee valgus |
+| Bicep curl | Shoulder–elbow–wrist angle | below 80°, then above 140° | range (>60°), extension (<150°), elbow drift (>20°) |
+
+Note that the *counting* thresholds are deliberately more generous than the
+*form* thresholds. An earlier design used the same number for both, which made
+three of the six form rules unreachable — a rep could not simultaneously be
+counted and be judged too shallow. A regression test now asserts every rule
+threshold falls inside the counted range.
+
+## Limitations
+
+These are real and worth stating plainly:
+
+- **2D pose estimation.** Thresholds are heuristics tuned against synthetic and
+  recorded movement, not clinical measurements.
+- **Smoothing lag.** The EMA damps movements completed in well under half a
+  second, so an unrealistically fast repetition is missed. Real repetitions
+  take one to three seconds.
+- **BMI** is a screening metric only, not a medical diagnosis. The application
+  states this wherever BMI appears.
+- **Nutrition values** are per standard household serving from a published
+  composition table; real portions vary.
+- **Fallback protein targets.** On a budget-restricted menu with an aggressive
+  protein target and a calorie deficit, the offline planner can land short on
+  protein — cheap foods are carbohydrate-dense. Closing that gap needs
+  constraint solving, which is out of scope.
+- **Natural-language quantities** are approximate, which is why the result is
+  presented as an editable draft rather than saved automatically.
+
+## Project structure
+
+```
+prisma/          schema, seed data (60 foods, 15 exercises), demo data
+src/lib/         pure logic: metrics, nutrition, profile, stats, week
+src/lib/ai/      client adapter, diet planner, workout planner, text parsing
+src/lib/pose/    geometry, smoothing, rep machine, exercise configs
+src/app/         pages and API routes
+src/components/  shared UI
+```
+
+## Documentation
+
+- Design specification: `docs/superpowers/specs/2026-09-29-fitai-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-09-29-fitai.md`
