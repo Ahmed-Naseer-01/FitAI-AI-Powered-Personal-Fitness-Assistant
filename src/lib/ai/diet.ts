@@ -18,7 +18,35 @@ export type MenuItem = {
 
 export type PlanItem = { foodId: number; servings: number }
 export type PlanMeal = { slot: MealSlot; items: PlanItem[]; reason: string }
-export type PlanResult = { meals: PlanMeal[]; source: 'ai' | 'fallback' }
+export type PlanResult = {
+  meals: PlanMeal[]
+  source: 'ai' | 'fallback'
+  /** Set when the plan could not reach the protein minimum, with the reason. */
+  shortfall?: string
+}
+
+/**
+ * Grams of protein per kcal achievable from the densest foods on this menu.
+ * Used to tell an infeasible target apart from a weak plan.
+ */
+export function bestProteinDensity(menu: MenuItem[]): number {
+  return menu.reduce((best, f) => (f.kcal > 0 ? Math.max(best, f.proteinG / f.kcal) : best), 0)
+}
+
+/**
+ * A protein target is unreachable when even the densest available food
+ * cannot supply it inside the calorie budget. Realistic meals use a mix, so
+ * anything above ~70% of the theoretical ceiling is not achievable in
+ * practice either.
+ */
+export function proteinTargetFeasible(
+  menu: MenuItem[],
+  target: number,
+  proteinMin: number,
+): boolean {
+  const ceiling = bestProteinDensity(menu) * target * 0.7
+  return proteinMin <= ceiling
+}
 
 const MIN_SERVINGS = 0.25
 const MAX_SERVINGS = 6
@@ -50,7 +78,11 @@ export async function buildMenu(opts: {
   return rows
     .filter((r) => !hasAnyTag(r.tags, opts.allergies))
     .filter((r) => (opts.budget === 'low' ? hasAnyTag(r.tags, ['budget']) : true))
-    .map(({ tags: _tags, ...rest }) => rest)
+    .map((row) => {
+      const { tags, ...rest } = row
+      void tags // used for the allergy filter above, not sent to the model
+      return rest
+    })
 }
 
 export function clampServings(meals: PlanMeal[]): PlanMeal[] {
@@ -233,6 +265,18 @@ export function fallbackDietPlan(
   })
 
   topUpProtein(meals, menu, target, proteinMin)
+
+  const achieved = planTotals(meals, menu).proteinG
+  if (proteinMin > 0 && achieved < proteinMin) {
+    const feasible = proteinTargetFeasible(menu, target, proteinMin)
+    return {
+      meals,
+      source: 'fallback',
+      shortfall: feasible
+        ? `This plan reaches ${Math.round(achieved)} g of protein against a ${proteinMin} g target.`
+        : `A ${proteinMin} g protein target is not achievable within ${target} kcal from the foods available to you — the densest options here top out near ${Math.round(bestProteinDensity(menu) * target * 0.7)} g. Consider raising your calorie target or widening your food preferences.`,
+    }
+  }
 
   return { meals, source: 'fallback' }
 }

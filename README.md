@@ -36,6 +36,14 @@ guarantee, not a matter of the prompt being obeyed.
 Next.js 16 (App Router, TypeScript) · Prisma 6 + SQLite · Tailwind CSS v4 ·
 Zod · Recharts · MediaPipe Tasks JS · Google Gemini API · Vitest
 
+### Resilience
+
+The free Gemini tier is frequently overloaded, so the client tries a chain of
+models and retries transient failures with backoff before giving up. A bad key
+or malformed request fails immediately, since retrying those cannot help. When
+every path fails, the deterministic planners take over — the application has
+no hard dependency on the provider being up.
+
 **Privacy:** webcam frames are processed entirely in the browser and never
 leave the device. Only aggregate rep counts and form scores are transmitted.
 
@@ -87,6 +95,12 @@ npm test
 Unit tests cover all health and nutrition arithmetic, the AI validators and
 fallback generators, and the pose geometry and rep-counting state machine.
 
+`src/app/api/__tests__/routes.test.ts` runs the real route handlers against a
+throwaway SQLite database created and destroyed per run, so the food log,
+profile, form-session and workout-completion endpoints are covered including
+their authorisation boundaries — a user cannot read, edit or delete another
+user's rows.
+
 `src/lib/pose/pipeline.test.ts` simulates the whole camera pipeline —
 visibility gate, joint angles, smoothing, rep counting, form rules — against
 synthetic landmarks, so **rep counting and form classification are verified
@@ -128,10 +142,14 @@ These are real and worth stating plainly:
   states this wherever BMI appears.
 - **Nutrition values** are per standard household serving from a published
   composition table; real portions vary.
-- **Fallback protein targets.** On a budget-restricted menu with an aggressive
-  protein target and a calorie deficit, the offline planner can land short on
-  protein — cheap foods are carbohydrate-dense. Closing that gap needs
-  constraint solving, which is out of scope.
+- **Infeasible protein targets.** On a budget-restricted menu with an
+  aggressive protein target and a calorie deficit, no plan can reach the
+  target: cheap foods are carbohydrate-dense, and 115 g of protein inside
+  1800 kcal needs about 0.064 g per kcal, which only eggs and pulses
+  approach. Rather than silently under-delivering, the planner detects this
+  and explains it — "a 114 g protein target is not achievable within 1529
+  kcal from the foods available to you" — and suggests raising the calorie
+  target or widening food preferences.
 - **Natural-language quantities** are approximate, which is why the result is
   presented as an editable draft rather than saved automatically.
 

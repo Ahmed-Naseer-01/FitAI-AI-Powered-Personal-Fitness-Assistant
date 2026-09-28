@@ -28,6 +28,7 @@ export default function PoseTrainer({ initialExercise }: { initialExercise: Exer
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const landmarkerRef = useRef<PoseLandmarker | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
   const machineRef = useRef<RepMachine | null>(null)
   const emaRef = useRef(new Ema(0.3))
@@ -153,8 +154,15 @@ export default function PoseTrainer({ initialExercise }: { initialExercise: Exer
           return
         }
 
+        // Held in a ref of its own: on unmount React nulls videoRef before
+        // cleanup runs, which previously left the camera on.
+        streamRef.current = stream
+
         const video = videoRef.current
-        if (!video) return
+        if (!video) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
         video.srcObject = stream
         await video.play()
         setStatus('ready')
@@ -186,8 +194,8 @@ export default function PoseTrainer({ initialExercise }: { initialExercise: Exer
     return () => {
       cancelled = true
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
-      const stream = videoRef.current?.srcObject as MediaStream | null
-      stream?.getTracks().forEach((t) => t.stop())
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
       landmarkerRef.current?.close()
       landmarkerRef.current = null
     }

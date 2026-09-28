@@ -33,7 +33,11 @@ export async function GET(request: Request) {
   const foods = candidates
     .filter((f) => !hasAnyTag(f.tags, allergies))
     .slice(0, 8)
-    .map(({ tags: _tags, ...rest }) => rest)
+    .map((row) => {
+      const { tags, ...rest } = row
+      void tags // used for the allergy filter above, not returned
+      return rest
+    })
 
   return NextResponse.json({ foods })
 }

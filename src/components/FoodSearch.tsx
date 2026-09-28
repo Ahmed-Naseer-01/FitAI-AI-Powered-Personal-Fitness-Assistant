@@ -24,16 +24,23 @@ export default function FoodSearch() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (query.trim().length === 0) {
-      setHits([])
-      return
-    }
+    let cancelled = false
+
     const timer = setTimeout(async () => {
+      if (query.trim().length === 0) {
+        if (!cancelled) setHits([])
+        return
+      }
       const res = await fetch(`/api/foods/search?q=${encodeURIComponent(query)}`)
       const data = await res.json()
-      setHits(data.foods ?? [])
+      // A newer keystroke may have landed while this request was in flight.
+      if (!cancelled) setHits(data.foods ?? [])
     }, 200)
-    return () => clearTimeout(timer)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [query])
 
   async function add() {

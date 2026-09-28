@@ -45,3 +45,6 @@ Thumbs.db
 
 # typescript build cache
 *.tsbuildinfo
+
+prisma/test.db
+prisma/test.db-journal

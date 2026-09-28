@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         userId,
         date: dayRange(new Date()).start,
         source: generated.source,
-        aiNotes: `Target ${metrics.calorieTarget} kcal, protein ${metrics.proteinTarget} g`,
+        aiNotes: generated.shortfall ?? '',
         items: {
           create: generated.meals.flatMap((m) =>
             m.items.map((i) => ({
@@ -105,6 +105,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     source: generated.source,
+    shortfall: generated.shortfall ?? null,
     totals: planTotals(generated.meals, menu),
   })
 }

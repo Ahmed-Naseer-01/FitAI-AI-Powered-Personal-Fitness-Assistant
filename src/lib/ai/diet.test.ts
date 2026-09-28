@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   clampServings, planTotals, validateDietPlan, fallbackDietPlan,
+  proteinTargetFeasible, bestProteinDensity,
   type MenuItem, type PlanMeal,
 } from './diet'
 
@@ -213,5 +214,52 @@ describe('fallbackDietPlan variant', () => {
         for (const item of meal.items) expect(ids.has(item.foodId)).toBe(true)
       }
     }
+  })
+})
+
+describe('protein feasibility', () => {
+  // Budget-style menu: carbohydrate-dense, one modest protein source.
+  const BUDGET: MenuItem[] = [
+    { id: 1, name: 'Roti', category: 'grain', servingLabel: '1', kcal: 120, proteinG: 3.5, carbsG: 25, fatG: 1.5 },
+    { id: 2, name: 'Egg', category: 'protein', servingLabel: '1', kcal: 78, proteinG: 6.3, carbsG: 0.6, fatG: 5.3 },
+    { id: 3, name: 'Sabzi', category: 'vegetable', servingLabel: '1 cup', kcal: 90, proteinG: 3, carbsG: 14, fatG: 3 },
+    { id: 4, name: 'Banana', category: 'fruit', servingLabel: '1', kcal: 105, proteinG: 1.3, carbsG: 27, fatG: 0.4 },
+    { id: 5, name: 'Peanuts', category: 'snack', servingLabel: '30g', kcal: 170, proteinG: 7, carbsG: 5, fatG: 14 },
+    { id: 6, name: 'Dahi', category: 'dairy', servingLabel: '1 cup', kcal: 150, proteinG: 8.5, carbsG: 11, fatG: 8 },
+  ]
+
+  it('calls a modest target feasible', () => {
+    expect(proteinTargetFeasible(BUDGET, 2000, 80)).toBe(true)
+  })
+
+  it('calls an unreachable target infeasible', () => {
+    // Egg is the densest at ~0.081 g/kcal; 0.7 * 0.081 * 1800 is about 102 g.
+    expect(proteinTargetFeasible(BUDGET, 1800, 115)).toBe(false)
+  })
+
+  it('reports the densest achievable value', () => {
+    expect(bestProteinDensity(BUDGET)).toBeCloseTo(6.3 / 78, 4)
+  })
+
+  it('ignores zero-calorie rows when computing density', () => {
+    const withWater = [...BUDGET, { id: 9, name: 'Water', category: 'drink', servingLabel: '1', kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 }]
+    expect(Number.isFinite(bestProteinDensity(withWater))).toBe(true)
+  })
+
+  it('explains an infeasible target rather than silently under-delivering', () => {
+    const plan = fallbackDietPlan(BUDGET, 1800, 115)
+    expect(plan.shortfall).toBeDefined()
+    expect(plan.shortfall).toContain('not achievable')
+    expect(plan.shortfall).toContain('1800 kcal')
+  })
+
+  it('does not set a shortfall when the target is met', () => {
+    expect(fallbackDietPlan(BUDGET, 2000, 50).shortfall).toBeUndefined()
+  })
+
+  it('still returns a usable plan when the target is infeasible', () => {
+    const plan = fallbackDietPlan(BUDGET, 1800, 115)
+    expect(plan.meals).toHaveLength(4)
+    expect(planTotals(plan.meals, BUDGET).kcal).toBeGreaterThan(1000)
   })
 })

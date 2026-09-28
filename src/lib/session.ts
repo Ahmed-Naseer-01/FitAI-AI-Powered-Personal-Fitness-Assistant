@@ -8,11 +8,19 @@ import { SignJWT, jwtVerify } from 'jose'
 const COOKIE_NAME = 'fitai_session'
 const MAX_AGE_SEC = 60 * 60 * 24 * 7 // 7 days
 
+export class MissingSecretError extends Error {
+  constructor() {
+    super(
+      'SESSION_SECRET is missing or shorter than 16 characters. ' +
+        'Copy .env.example to .env and set it — generate one with: openssl rand -base64 32',
+    )
+    this.name = 'MissingSecretError'
+  }
+}
+
 function secret(): Uint8Array {
   const value = process.env.SESSION_SECRET
-  if (!value || value.length < 16) {
-    throw new Error('SESSION_SECRET is missing or too short — set it in .env')
-  }
+  if (!value || value.length < 16) throw new MissingSecretError()
   return new TextEncoder().encode(value)
 }
 

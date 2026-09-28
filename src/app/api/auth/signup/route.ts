@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, zCredentials } from '@/lib/auth'
-import { createSession } from '@/lib/session'
+import { createSession, MissingSecretError } from '@/lib/session'
 
 export async function POST(request: Request) {
   const parsed = zCredentials.safeParse(await request.json().catch(() => null))
@@ -22,6 +22,14 @@ export async function POST(request: Request) {
     data: { email, passwordHash: await hashPassword(password) },
   })
 
-  await createSession(user.id)
+  try {
+    await createSession(user.id)
+  } catch (e) {
+    if (e instanceof MissingSecretError) {
+      return NextResponse.json({ error: e.message }, { status: 500 })
+    }
+    throw e
+  }
+
   return NextResponse.json({ ok: true, next: '/onboarding' })
 }

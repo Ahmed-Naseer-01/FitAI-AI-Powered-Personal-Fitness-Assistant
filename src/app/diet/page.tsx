@@ -56,6 +56,12 @@ export default async function DietPage() {
         </p>
       ) : (
         <>
+          {plan.aiNotes && (
+            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              {plan.aiNotes}
+            </p>
+          )}
+
           <div className="rounded-lg bg-gray-50 p-3 text-sm">
             <strong>{Math.round(totals!.kcal)} kcal</strong> · {Math.round(totals!.proteinG)} g
             protein · {Math.round(totals!.carbsG)} g carbs · {Math.round(totals!.fatG)} g fat
