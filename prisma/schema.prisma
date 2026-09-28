@@ -1,0 +1,201 @@
+// FitAI data model.
+// Note: SQLite supports neither scalar lists nor enums, so `tags`, `allergies`
+// and `feedbackTags` are comma-separated strings (see src/lib/tags.ts) and every
+// enum-like column is a String validated by a Zod union in src/lib/types.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  profile         Profile?
+  weightEntries   WeightEntry[]
+  foodLogs        FoodLog[]
+  mealPlans       MealPlan[]
+  workoutPlans    WorkoutPlan[]
+  workoutSessions WorkoutSession[]
+  formSessions    FormSession[]
+}
+
+model Profile {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique
+  name              String
+  age               Int
+  gender            String
+  heightCm          Float
+  weightKg          Float
+  activityLevel     String
+  experience        String   @default("beginner")
+  goal              String
+  workoutDays       Int      @default(3)
+  sessionMinutes    Int      @default(45)
+  dietaryPreference String   @default("non_veg")
+  allergies         String   @default("")
+  budget            String   @default("any")
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WeightEntry {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  weightKg   Float
+  bmi        Float
+  recordedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
+}
+
+model Food {
+  id           Int     @id @default(autoincrement())
+  name         String
+  nameUrdu     String?
+  category     String
+  servingLabel String
+  servingGrams Float
+  kcal         Float
+  proteinG     Float
+  carbsG       Float
+  fatG         Float
+  isVeg        Boolean
+  tags         String  @default("")
+
+  foodLogs      FoodLog[]
+  mealPlanItems MealPlanItem[]
+}
+
+model FoodLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  foodId     Int
+  servings   Float
+  mealSlot   String
+  consumedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  food Food @relation(fields: [foodId], references: [id])
+
+  @@index([userId, consumedAt])
+}
+
+model MealPlan {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  date        DateTime
+  generatedAt DateTime @default(now())
+  source      String   @default("ai")
+  aiNotes     String   @default("")
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealPlanItem[]
+
+  @@index([userId, date])
+}
+
+model MealPlanItem {
+  id         Int    @id @default(autoincrement())
+  mealPlanId Int
+  foodId     Int
+  servings   Float
+  mealSlot   String
+  reason     String @default("")
+
+  mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  food     Food     @relation(fields: [foodId], references: [id])
+}
+
+model Exercise {
+  id              Int     @id @default(autoincrement())
+  name            String
+  muscleGroup     String
+  equipment       String
+  difficulty      String
+  metValue        Float
+  hasFormTracking Boolean @default(false)
+  formKey         String?
+  defaultSets     Int     @default(3)
+  defaultReps     Int     @default(12)
+  repUnit         String  @default("reps")
+
+  workoutPlanItems WorkoutPlanItem[]
+  workoutSessions  WorkoutSession[]
+  formSessions     FormSession[]
+}
+
+model WorkoutPlan {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  weekStart   DateTime
+  generatedAt DateTime @default(now())
+  source      String   @default("ai")
+  aiNotes     String   @default("")
+
+  user  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WorkoutPlanItem[]
+
+  @@index([userId, weekStart])
+}
+
+model WorkoutPlanItem {
+  id            Int    @id @default(autoincrement())
+  workoutPlanId Int
+  exerciseId    Int
+  dayOfWeek     Int
+  sets          Int
+  reps          Int
+  restSec       Int    @default(60)
+  focus         String @default("")
+  reason        String @default("")
+
+  workoutPlan WorkoutPlan      @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  exercise    Exercise         @relation(fields: [exerciseId], references: [id])
+  sessions    WorkoutSession[]
+}
+
+model WorkoutSession {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  workoutPlanItemId Int?
+  exerciseId        Int
+  completedAt       DateTime @default(now())
+  durationSec       Int
+  totalReps         Int
+  estimatedKcal     Float
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise        Exercise         @relation(fields: [exerciseId], references: [id])
+  workoutPlanItem WorkoutPlanItem? @relation(fields: [workoutPlanItemId], references: [id])
+
+  @@index([userId, completedAt])
+}
+
+model FormSession {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  exerciseId    Int
+  startedAt     DateTime @default(now())
+  durationSec   Int
+  correctReps   Int
+  incorrectReps Int
+  avgFormScore  Float
+  feedbackTags  String   @default("")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id])
+
+  @@index([userId, startedAt])
+}
