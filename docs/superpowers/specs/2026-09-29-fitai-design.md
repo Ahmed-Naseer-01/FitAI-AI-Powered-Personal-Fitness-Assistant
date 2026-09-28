@@ -41,7 +41,7 @@ nutrition databases, mobile apps, real-time multi-user features.
 | Database | SQLite via Prisma | No DB server to run on demo day |
 | Auth | Email + password, bcrypt, session cookie | Expected by examiners; half a day to build |
 | Pose detection | MediaPipe Tasks JS (`PoseLandmarker`, WASM) | Pre-trained, runs in-browser, no GPU server |
-| LLM | Google Gemini API (`gemini-2.0-flash`), free tier, native `responseSchema` | No cost, no payment card; schema is enforced by the provider |
+| LLM | Google Gemini API (`gemini-3.8-flash`), free tier, native `responseSchema` | No cost, no payment card; schema is enforced by the provider |
 | Charts | Recharts | Line and bar charts only |
 | Validation | Zod | One schema per AI endpoint |
 
@@ -237,7 +237,7 @@ single function:
 generateStructured<T>(prompt: string, schema: ZodSchema<T>): Promise<T | null>
 ```
 
-The default implementation calls the **Google Gemini API** (`gemini-2.0-flash`)
+The default implementation calls the **Google Gemini API** (`gemini-3.8-flash`)
 on its free tier, passing the schema as `responseSchema` so the provider itself
 guarantees the response shape. The API key lives in `GEMINI_API_KEY`.
 

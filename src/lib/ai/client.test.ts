@@ -156,3 +156,64 @@ describe('generateStructured', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('response parsing robustness', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('finds the answer when a reasoning part precedes it', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{
+          content: {
+            parts: [
+              { thoughtSignature: 'EsoEC...' },
+              { text: '{"answer": 42}' },
+            ],
+          },
+        }],
+      }),
+    }))
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toEqual({
+      answer: 42,
+    })
+  })
+
+  it('handles a part carrying both text and a thought signature', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{
+          content: { parts: [{ text: '{"answer": 7}', thoughtSignature: 'abc' }] },
+        }],
+      }),
+    }))
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toEqual({
+      answer: 7,
+    })
+  })
+
+  it('ignores empty text parts', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: '   ' }, { text: '{"answer": 5}' }] } }],
+      }),
+    }))
+
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toEqual({
+      answer: 5,
+    })
+  })
+})

@@ -8,7 +8,8 @@ import type { ZodType } from 'zod'
 
 export type JsonSchema = Record<string, unknown>
 
-const MODEL = 'gemini-2.0-flash'
+// Verified available 2026-09. Older 2.x models are refused for new API keys.
+const MODEL = 'gemini-3.8-flash'
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
 export function isAiEnabled(): boolean {
@@ -52,8 +53,15 @@ async function callOnce(prompt: string, jsonSchema: JsonSchema): Promise<unknown
 
   try {
     const body = await response.json()
-    const text = body?.candidates?.[0]?.content?.parts?.[0]?.text
-    if (typeof text !== 'string') return null
+
+    // Reasoning models interleave thought parts with the answer, so take the
+    // first part that actually carries text rather than assuming parts[0].
+    const parts: unknown[] = body?.candidates?.[0]?.content?.parts ?? []
+    const text = parts
+      .map((p) => (p as { text?: unknown })?.text)
+      .find((t): t is string => typeof t === 'string' && t.trim().length > 0)
+
+    if (text === undefined) return null
     return JSON.parse(text)
   } catch {
     return null // malformed body, or text that is not JSON
