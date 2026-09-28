@@ -10,6 +10,8 @@ import {
   type ExerciseKey, type RepStats,
 } from '@/lib/pose/exercises'
 import type { Pt } from '@/lib/pose/angles'
+import { Button, Card, CardBody, Field, Notice, Select, Spinner, cn } from '@/components/ui'
+import { IconCamera } from '@/components/ui/icons'
 
 const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
 const MODEL_PATH = '/models/pose_landmarker_lite.task'
@@ -248,42 +250,71 @@ export default function PoseTrainer({ initialExercise }: { initialExercise: Exer
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="text-sm font-medium">
-        Exercise
-        <select
-          value={exercise}
-          disabled={status === 'running' || status === 'saving'}
-          onChange={(e) => setExercise(e.target.value as ExerciseKey)}
-          className="mt-1 block rounded border border-gray-300 px-3 py-2 disabled:opacity-50"
-        >
-          {Object.values(EXERCISE_CONFIGS).map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Card>
+        <CardBody className="flex flex-col gap-3">
+          <Field label="Exercise">
+            {(p) => (
+              <Select
+                {...p}
+                value={exercise}
+                disabled={status === 'running' || status === 'saving'}
+                onChange={(e) => setExercise(e.target.value as ExerciseKey)}
+              >
+                {Object.values(EXERCISE_CONFIGS).map((c) => (
+                  <option key={c.key} value={c.key}>{c.displayName}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
 
-      <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">{cfg.setupHint}</p>
+          <div className="flex gap-2.5 rounded-[var(--radius-control)] bg-accent-soft px-3.5 py-3">
+            <IconCamera className="mt-0.5 size-4 shrink-0 text-accent-soft-fg" />
+            <p className="text-sm leading-relaxed text-accent-soft-fg">{cfg.setupHint}</p>
+          </div>
+        </CardBody>
+      </Card>
 
-      {error && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
-          {error}
-        </div>
-      )}
+      {error && <Notice tone="danger">{error}</Notice>}
 
-      <div className="relative overflow-hidden rounded-lg bg-black">
-        <video ref={videoRef} playsInline muted className="w-full" />
-        <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+      {/* Video stage */}
+      <div className="relative overflow-hidden rounded-[var(--radius-card)] bg-ink-950 shadow-[var(--shadow-lg)]">
+        <video ref={videoRef} playsInline muted className="aspect-[4/3] w-full object-cover" />
+        <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 size-full" />
 
         {status === 'loading' && (
-          <div className="absolute inset-0 grid place-items-center bg-black/70 text-sm text-white">
-            Loading pose model…
+          <div className="absolute inset-0 grid place-items-center bg-ink-950/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 text-white">
+              <Spinner className="size-6" />
+              <p className="text-sm font-medium">Loading pose model…</p>
+              <p className="text-xs text-white/60">About 5 MB, first time only</p>
+            </div>
+          </div>
+        )}
+
+        {/* Live rep counter floats over the video while a session runs */}
+        {status === 'running' && (
+          <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-full bg-ink-950/70 px-3.5 py-1.5 backdrop-blur-sm">
+            <span className="tabular text-xl font-bold leading-none text-white">{reps}</span>
+            <span className="text-[0.65rem] font-medium uppercase tracking-wider text-white/70">
+              reps
+            </span>
+          </div>
+        )}
+
+        {status === 'running' && lastRepGood !== null && (
+          <div
+            key={reps}
+            className={cn(
+              'animate-scale-in pointer-events-none absolute right-3 top-3 rounded-full px-3 py-1.5 text-xs font-semibold',
+              lastRepGood ? 'bg-success text-white' : 'bg-warning text-white',
+            )}
+          >
+            {lastRepGood ? 'CORRECT' : 'NEEDS WORK'}
           </div>
         )}
 
         {status !== 'loading' && status !== 'idle' && !inFrame && (
-          <div className="absolute inset-x-0 bottom-0 bg-amber-500 p-2 text-center text-sm font-medium text-white">
+          <div className="absolute inset-x-0 bottom-0 bg-warning px-3 py-2.5 text-center text-sm font-medium text-white">
             Step back into frame
           </div>
         )}
@@ -291,71 +322,70 @@ export default function PoseTrainer({ initialExercise }: { initialExercise: Exer
 
       {status === 'running' && (
         <>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-lg border border-gray-200 p-3">
-              <div className="text-xs uppercase text-gray-500">Reps</div>
-              <div className="text-3xl font-bold">{reps}</div>
-            </div>
-            <div
-              className={`rounded-lg p-3 ${
-                lastRepGood === null
-                  ? 'border border-gray-200'
-                  : lastRepGood
-                    ? 'bg-green-100'
-                    : 'bg-amber-100'
-              }`}
-            >
-              <div className="text-xs uppercase text-gray-500">Last rep</div>
-              <div className="text-lg font-semibold">
-                {lastRepGood === null ? '—' : lastRepGood ? 'CORRECT' : 'NEEDS WORK'}
-              </div>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-3">
-              <div className="text-xs uppercase text-gray-500">Form score</div>
-              <div className="text-3xl font-bold">{score}</div>
-            </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Card><CardBody className="p-3.5 text-center">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-fg-subtle">Correct</p>
+              <p className="tabular mt-1 text-2xl font-bold text-success">{correct}</p>
+            </CardBody></Card>
+            <Card><CardBody className="p-3.5 text-center">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-fg-subtle">Needs work</p>
+              <p className="tabular mt-1 text-2xl font-bold text-warning">{incorrect}</p>
+            </CardBody></Card>
+            <Card><CardBody className="p-3.5 text-center">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-fg-subtle">Score</p>
+              <p className="tabular mt-1 text-2xl font-bold text-fg">{score}</p>
+            </CardBody></Card>
           </div>
 
-          <p className="rounded-lg bg-gray-900 p-4 text-center text-lg font-medium text-white">
+          <p
+            role="status"
+            aria-live="polite"
+            className="rounded-[var(--radius-card)] bg-ink-900 px-5 py-4 text-center text-lg font-semibold text-white dark:bg-surface-raised dark:text-fg"
+          >
             {feedback}
           </p>
         </>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         {status !== 'running' && status !== 'done' && (
-          <button
-            onClick={start}
-            disabled={!canStart || status !== 'ready'}
-            className="rounded bg-black px-4 py-2 text-white disabled:opacity-40"
-          >
+          <Button size="lg" onClick={start} disabled={!canStart || status !== 'ready'} className="w-full sm:w-auto">
             {status === 'loading'
               ? 'Loading…'
               : canStart
                 ? 'Start session'
                 : 'Get fully in frame to start'}
-          </button>
+          </Button>
         )}
 
         {status === 'running' && (
-          <button onClick={finish} className="rounded bg-black px-4 py-2 text-white">
+          <Button size="lg" onClick={finish} className="w-full sm:w-auto">
             Finish and save
-          </button>
+          </Button>
         )}
 
-        {status === 'saving' && <p className="text-sm text-gray-500">Saving…</p>}
+        {status === 'saving' && (
+          <p className="flex items-center gap-2 text-sm text-fg-muted"><Spinner /> Saving…</p>
+        )}
 
         {status === 'done' && (
-          <div className="rounded-lg bg-green-50 p-4 text-sm text-green-900">
-            Saved — {correct} correct, {incorrect} needing work, form score {score}.
-            <button onClick={() => setStatus('ready')} className="ml-3 underline">
-              Start another
-            </button>
-          </div>
+          <Card className="animate-scale-in w-full border-success/30 bg-success-soft">
+            <CardBody className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-success">Session saved</p>
+                <p className="tabular mt-0.5 text-sm text-fg-muted">
+                  {correct} correct · {incorrect} needing work · form score {score}
+                </p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => setStatus('ready')}>
+                Start another
+              </Button>
+            </CardBody>
+          </Card>
         )}
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs leading-relaxed text-fg-subtle">
         Video is processed entirely in your browser and is never uploaded. Only the rep counts and
         form score are saved.
       </p>

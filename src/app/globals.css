@@ -1,26 +1,244 @@
 @import "tailwindcss";
 
+/* ============================================================
+   FitAI design system
+   Tokens first, so every component draws from one source.
+   ============================================================ */
+
+@theme {
+  /* Brand — emerald reads as health without being a neon gym cliché */
+  --color-brand-50: oklch(0.979 0.021 166);
+  --color-brand-100: oklch(0.95 0.052 163);
+  --color-brand-200: oklch(0.905 0.093 164);
+  --color-brand-300: oklch(0.845 0.143 164);
+  --color-brand-400: oklch(0.765 0.177 163);
+  --color-brand-500: oklch(0.696 0.17 162);
+  --color-brand-600: oklch(0.596 0.145 163);
+  --color-brand-700: oklch(0.508 0.118 165);
+  --color-brand-800: oklch(0.432 0.095 166);
+  --color-brand-900: oklch(0.378 0.077 168);
+  --color-brand-950: oklch(0.262 0.051 172);
+
+  /* Neutrals — warm greys sit better beside emerald than pure slate */
+  --color-ink-50: oklch(0.985 0.001 106);
+  --color-ink-100: oklch(0.97 0.001 106);
+  --color-ink-200: oklch(0.923 0.003 48);
+  --color-ink-300: oklch(0.869 0.005 56);
+  --color-ink-400: oklch(0.709 0.01 56);
+  --color-ink-500: oklch(0.553 0.013 58);
+  --color-ink-600: oklch(0.444 0.011 73);
+  --color-ink-700: oklch(0.374 0.01 67);
+  --color-ink-800: oklch(0.268 0.007 34);
+  --color-ink-900: oklch(0.216 0.006 56);
+  --color-ink-950: oklch(0.147 0.004 49);
+
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+
+  /* Motion — one shared easing so everything feels part of one system */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 380ms;
+}
+
+/* ---------- semantic tokens: light ---------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: var(--color-ink-50);
+  --bg-subtle: var(--color-ink-100);
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: var(--color-ink-200);
+  --border-strong: var(--color-ink-300);
+
+  --fg: var(--color-ink-900);
+  /* Both text tints are pinned to WCAG AA on white (4.5:1) rather than to a
+     palette step — small grey text is the easiest contrast rule to fail. */
+  --fg-muted: oklch(0.47 0.012 58);   /* ~6.0:1 */
+  --fg-subtle: oklch(0.568 0.01 56);  /* ~4.5:1 */
+
+  /* brand-600 measured 3.67:1 on white, under the 4.5 needed for link text */
+  --accent: oklch(0.53 0.145 163);    /* ~4.6:1 */
+  --accent-hover: oklch(0.455 0.125 164);
+  --accent-fg: #ffffff;
+  --accent-soft: var(--color-brand-50);
+  --accent-soft-fg: var(--color-brand-800);
+
+  --success: oklch(0.55 0.14 155);
+  --success-soft: oklch(0.96 0.03 155);
+  --warning: oklch(0.55 0.13 75);
+  --warning-soft: oklch(0.97 0.04 85);
+  --danger: oklch(0.55 0.19 25);
+  --danger-soft: oklch(0.96 0.03 25);
+
+  --shadow-sm: 0 1px 2px 0 oklch(0.147 0.004 49 / 0.05);
+  --shadow-md: 0 1px 3px 0 oklch(0.147 0.004 49 / 0.07), 0 4px 12px -2px oklch(0.147 0.004 49 / 0.06);
+  --shadow-lg: 0 2px 6px -1px oklch(0.147 0.004 49 / 0.08), 0 12px 28px -6px oklch(0.147 0.004 49 / 0.1);
+
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* ---------- semantic tokens: dark ---------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: oklch(0.165 0.005 56);
+    --bg-subtle: oklch(0.205 0.006 56);
+    --surface: oklch(0.216 0.006 56);
+    --surface-raised: oklch(0.252 0.007 56);
+    --border: oklch(0.31 0.008 56);
+    --border-strong: oklch(0.385 0.009 56);
+
+    --fg: oklch(0.96 0.002 106);
+    --fg-muted: oklch(0.72 0.01 56);
+    --fg-subtle: oklch(0.6 0.011 58);
+
+    --accent: var(--color-brand-500);
+    --accent-hover: var(--color-brand-400);
+    --accent-fg: oklch(0.16 0.02 170);
+    --accent-soft: oklch(0.3 0.05 168);
+    --accent-soft-fg: var(--color-brand-200);
+
+    --success: oklch(0.72 0.15 155);
+    --success-soft: oklch(0.3 0.05 155);
+    --warning: oklch(0.79 0.14 80);
+    --warning-soft: oklch(0.32 0.05 75);
+    --danger: oklch(0.68 0.17 25);
+    --danger-soft: oklch(0.31 0.07 25);
+
+    --shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+    --shadow-md: 0 1px 3px 0 oklch(0 0 0 / 0.35), 0 4px 12px -2px oklch(0 0 0 / 0.3);
+    --shadow-lg: 0 2px 6px -1px oklch(0 0 0 / 0.4), 0 12px 28px -6px oklch(0 0 0 / 0.35);
+
+    color-scheme: dark;
   }
 }
 
+/* Expose the semantic tokens as Tailwind utilities (bg-surface, text-fg, …) */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border-base: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-fg: var(--accent-soft-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Tabular figures everywhere a number changes, so digits stop jittering */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* One visible, consistent focus ring — keyboard only, never on mouse click */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+}
+
+/* Let the skeleton shimmer and charts breathe without layout shift */
+svg {
+  display: block;
+}
+
+/* ============================================================
+   Motion
+   Every animation below is disabled wholesale under
+   prefers-reduced-motion, including smooth scrolling.
+   ============================================================ */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-in { animation: fade-in var(--duration-base) var(--ease-out-soft) both; }
+.animate-rise-in { animation: rise-in var(--duration-slow) var(--ease-out-soft) both; }
+.animate-scale-in { animation: scale-in var(--duration-base) var(--ease-out-soft) both; }
+.animate-slide-down { animation: slide-down var(--duration-fast) var(--ease-out-soft) both; }
+
+/* Staggered entrance for lists and card grids */
+.stagger > * { animation: rise-in var(--duration-slow) var(--ease-out-soft) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 45ms; }
+.stagger > *:nth-child(3) { animation-delay: 90ms; }
+.stagger > *:nth-child(4) { animation-delay: 135ms; }
+.stagger > *:nth-child(5) { animation-delay: 180ms; }
+.stagger > *:nth-child(6) { animation-delay: 225ms; }
+.stagger > *:nth-child(n + 7) { animation-delay: 260ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .stagger > * { animation-delay: 0ms !important; }
 }

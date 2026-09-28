@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button, Field, Input } from '@/components/ui'
 
 /**
  * Updating your weight IS logging it — the profile POST appends a
@@ -11,10 +12,12 @@ export default function WeightUpdateForm({ currentWeight }: { currentWeight: num
   const router = useRouter()
   const [weight, setWeight] = useState(String(currentWeight))
   const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
+    setSaved(false)
 
     // Re-send the whole profile with only the weight changed, so the single
     // profile endpoint stays the only write path.
@@ -30,30 +33,37 @@ export default function WeightUpdateForm({ currentWeight }: { currentWeight: num
     })
 
     setBusy(false)
+    setSaved(true)
     router.refresh()
+    setTimeout(() => setSaved(false), 2500)
   }
 
   return (
-    <form onSubmit={submit} className="mt-2 flex items-end gap-2">
-      <label className="text-sm font-medium">
-        Weight (kg)
-        <input
-          type="number"
-          step="0.1"
-          min={25}
-          max={300}
-          value={weight}
-          onChange={(e) => setWeight(e.target.value)}
-          className="mt-1 block w-32 rounded border border-gray-300 px-3 py-2"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={busy}
-        className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-      >
-        {busy ? 'Saving…' : 'Save'}
-      </button>
+    <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+      <Field label="Weight" hint="kilograms" className="w-32">
+        {(p) => (
+          <Input
+            {...p}
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min={25}
+            max={300}
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+          />
+        )}
+      </Field>
+
+      <Button type="submit" loading={busy} loadingText="Saving…" className="mb-[1.375rem]">
+        Save
+      </Button>
+
+      {saved && (
+        <p role="status" className="animate-fade-in mb-[1.625rem] text-sm font-medium text-success">
+          Weight updated
+        </p>
+      )}
     </form>
   )
 }

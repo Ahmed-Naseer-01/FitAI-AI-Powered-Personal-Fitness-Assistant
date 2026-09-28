@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui'
+import { IconSpark } from '@/components/ui/icons'
 
 export default function GeneratePlanButton({ hasPlan }: { hasPlan: boolean }) {
   const router = useRouter()
@@ -19,12 +21,9 @@ export default function GeneratePlanButton({ hasPlan }: { hasPlan: boolean }) {
   }
 
   return (
-    <button
-      onClick={generate}
-      disabled={busy}
-      className="shrink-0 rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
-    >
-      {busy ? 'Generating…' : hasPlan ? 'Regenerate all' : 'Generate plan'}
-    </button>
+    <Button onClick={generate} loading={busy} loadingText="Generating…">
+      {!busy && <IconSpark className="size-4" />}
+      {hasPlan ? 'Regenerate all' : 'Generate plan'}
+    </Button>
   )
 }

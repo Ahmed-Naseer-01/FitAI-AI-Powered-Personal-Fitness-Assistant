@@ -3,6 +3,7 @@ import { requireUserId } from '@/lib/session'
 import { getProfileWithMetrics } from '@/lib/profile'
 import PoseTrainer from '@/components/PoseTrainer'
 import type { ExerciseKey } from '@/lib/pose/exercises'
+import { Page, PageHeader } from '@/components/ui'
 
 export default async function TrainPage({
   searchParams,
@@ -16,14 +17,12 @@ export default async function TrainPage({
   const initial: ExerciseKey = requested === 'bicep_curl' ? 'bicep_curl' : 'squat'
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Form analysis</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Counts your reps and checks your form using your webcam.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        title="Form analysis"
+        subtitle="Counts your reps and checks your form using your webcam."
+      />
       <PoseTrainer initialExercise={initial} />
-    </main>
+    </Page>
   )
 }

@@ -7,6 +7,7 @@ import { totalFor } from '@/lib/nutrition'
 import { getDashboardData } from '@/lib/stats'
 import StatCards from '@/components/dashboard/StatCards'
 import Charts from '@/components/dashboard/Charts'
+import { Page, PageHeader, cn } from '@/components/ui'
 
 export default async function DashboardPage({
   searchParams,
@@ -26,30 +27,45 @@ export default async function DashboardPage({
   const todayConsumed = totalFor(todayRows.map((r) => ({ servings: r.servings, food: r.food })))
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-5 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Hi, {result.profile.name}</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Target {result.metrics.calorieTarget} kcal · {result.metrics.proteinTarget} g protein
-            {data.averageCalories !== null && ` · averaging ${data.averageCalories} kcal`}
-          </p>
-        </div>
-
-        <div className="flex gap-1 rounded-lg border border-gray-200 p-1">
-          {[7, 30].map((d) => (
-            <Link
-              key={d}
-              href={`/dashboard?range=${d}`}
-              className={`rounded px-3 py-1 text-sm ${
-                days === d ? 'bg-black text-white' : 'text-gray-600'
-              }`}
-            >
-              {d} days
-            </Link>
-          ))}
-        </div>
-      </div>
+    <Page width="lg">
+      <PageHeader
+        title={`Hi, ${result.profile.name}`}
+        subtitle={
+          <>
+            <span className="tabular">{result.metrics.calorieTarget}</span> kcal ·{' '}
+            <span className="tabular">{result.metrics.proteinTarget}</span> g protein target
+            {data.averageCalories !== null && (
+              <>
+                {' · averaging '}
+                <span className="tabular">{data.averageCalories}</span> kcal
+              </>
+            )}
+          </>
+        }
+        action={
+          <div
+            role="group"
+            aria-label="Time range"
+            className="flex gap-1 rounded-[var(--radius-control)] border border-border-base bg-surface p-1"
+          >
+            {[7, 30].map((d) => (
+              <Link
+                key={d}
+                href={`/dashboard?range=${d}`}
+                aria-current={days === d ? 'true' : undefined}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-[var(--duration-fast)]',
+                  days === d
+                    ? 'bg-accent text-accent-fg'
+                    : 'text-fg-muted hover:bg-bg-subtle hover:text-fg',
+                )}
+              >
+                {d} days
+              </Link>
+            ))}
+          </div>
+        }
+      />
 
       <StatCards
         data={data}
@@ -59,6 +75,6 @@ export default async function DashboardPage({
       />
 
       <Charts data={data} target={result.metrics.calorieTarget} />
-    </main>
+    </Page>
   )
 }

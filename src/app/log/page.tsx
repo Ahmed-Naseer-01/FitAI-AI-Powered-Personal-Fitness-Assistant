@@ -1,19 +1,17 @@
 import { redirect } from 'next/navigation'
 import { requireUserId } from '@/lib/session'
 import { getProfileWithMetrics } from '@/lib/profile'
-import { isAiEnabled } from '@/lib/ai/client'
 import { buildDaySummary, getDayLogs } from '@/lib/foodLog'
+import { isAiEnabled } from '@/lib/ai/client'
 import { MEAL_SLOTS, type MealSlot } from '@/lib/types'
 import DailySummary from '@/components/DailySummary'
 import FoodSearch from '@/components/FoodSearch'
-import NaturalLanguageEntry from '@/components/NaturalLanguageEntry'
 import LogRowItem from '@/components/LogRowItem'
+import NaturalLanguageEntry from '@/components/NaturalLanguageEntry'
+import { Card, CardBody, Page, PageHeader } from '@/components/ui'
 
 const SLOT_LABEL: Record<MealSlot, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  snack: 'Snacks',
-  dinner: 'Dinner',
+  breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snacks', dinner: 'Dinner',
 }
 
 export default async function LogPage() {
@@ -25,42 +23,55 @@ export default async function LogPage() {
   const summary = buildDaySummary(rows, result.metrics.calorieTarget, result.metrics.proteinTarget)
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Today</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          {new Date().toLocaleDateString(undefined, {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-          })}
-        </p>
+    <Page>
+      <PageHeader
+        title="Today"
+        subtitle={new Date().toLocaleDateString(undefined, {
+          weekday: 'long', day: 'numeric', month: 'long',
+        })}
+      />
+
+      <div className="stagger flex flex-col gap-4">
+        <DailySummary summary={summary} />
+        <FoodSearch />
+        <NaturalLanguageEntry aiEnabled={isAiEnabled()} />
       </div>
 
-      <DailySummary summary={summary} />
-      <FoodSearch />
-      <NaturalLanguageEntry aiEnabled={isAiEnabled()} />
+      <section className="flex flex-col gap-3">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-fg-subtle">
+          Meals
+        </h2>
 
-      {MEAL_SLOTS.map((slot) => (
-        <section key={slot}>
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-semibold">{SLOT_LABEL[slot]}</h2>
-            <span className="text-sm text-gray-500">
-              {Math.round(summary.slotTotals[slot].kcal)} kcal
-            </span>
-          </div>
+        <div className="stagger flex flex-col gap-3">
+          {MEAL_SLOTS.map((slot) => {
+            const items = summary.bySlot[slot]
+            return (
+              <Card key={slot}>
+                <CardBody className="p-0">
+                  <div className="flex items-baseline justify-between px-3.5 py-3">
+                    <h3 className="text-sm font-semibold text-fg">{SLOT_LABEL[slot]}</h3>
+                    <span className="tabular text-xs font-medium text-fg-muted">
+                      {Math.round(summary.slotTotals[slot].kcal)} kcal
+                    </span>
+                  </div>
 
-          {summary.bySlot[slot].length === 0 ? (
-            <p className="mt-1 text-sm text-gray-400">Nothing logged.</p>
-          ) : (
-            <ul className="mt-1 divide-y divide-gray-100 rounded-lg border border-gray-200">
-              {summary.bySlot[slot].map((row) => (
-                <LogRowItem key={row.id} row={row} />
-              ))}
-            </ul>
-          )}
-        </section>
-      ))}
-    </main>
+                  {items.length === 0 ? (
+                    <p className="border-t border-border-base px-3.5 py-4 text-sm text-fg-subtle">
+                      Nothing logged.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-[var(--border)] border-t border-border-base">
+                      {items.map((row) => (
+                        <LogRowItem key={row.id} row={row} />
+                      ))}
+                    </ul>
+                  )}
+                </CardBody>
+              </Card>
+            )
+          })}
+        </div>
+      </section>
+    </Page>
   )
 }

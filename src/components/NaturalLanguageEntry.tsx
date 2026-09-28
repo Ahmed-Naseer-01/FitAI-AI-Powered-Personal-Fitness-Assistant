@@ -3,12 +3,18 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MEAL_SLOTS, type MealSlot } from '@/lib/types'
+import { Badge, Button, Card, CardBody, Input, Notice, Spinner } from '@/components/ui'
+import { IconSpark } from '@/components/ui/icons'
 
 type DraftRow = {
   foodId: number
   servings: number
   mealSlot: MealSlot
   food: { id: number; name: string; servingLabel: string; kcal: number }
+}
+
+const SLOT_LABEL: Record<MealSlot, string> = {
+  breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack', dinner: 'Dinner',
 }
 
 export default function NaturalLanguageEntry({ aiEnabled }: { aiEnabled: boolean }) {
@@ -34,7 +40,7 @@ export default function NaturalLanguageEntry({ aiEnabled }: { aiEnabled: boolean
 
     if (!res.ok) return setNote(data.error ?? 'Could not read that')
     if (!data.draft || data.draft.length === 0) {
-      return setNote('Could not match anything. Try the search box above.')
+      return setNote('Could not match anything to the food database. Try the search box above.')
     }
     setDraft(data.draft)
   }
@@ -47,9 +53,7 @@ export default function NaturalLanguageEntry({ aiEnabled }: { aiEnabled: boolean
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         entries: draft.map((d) => ({
-          foodId: d.foodId,
-          servings: d.servings,
-          mealSlot: d.mealSlot,
+          foodId: d.foodId, servings: d.servings, mealSlot: d.mealSlot,
         })),
       }),
     })
@@ -63,94 +67,100 @@ export default function NaturalLanguageEntry({ aiEnabled }: { aiEnabled: boolean
     setDraft((prev) => prev?.map((row, i) => (i === index ? { ...row, ...patch } : row)) ?? null)
   }
 
+  const draftKcal = draft?.reduce((n, d) => n + d.food.kcal * d.servings, 0) ?? 0
+
   return (
-    <section className="rounded-lg border border-gray-200 p-4">
-      <h2 className="font-semibold">Or describe what you ate</h2>
-      <p className="mt-1 text-xs text-gray-500">
-        Quantities read from text are approximate — check the draft before saving.
-      </p>
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="two rotis, chicken curry and a glass of lassi"
-          className="min-w-52 flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-        />
-        <button
-          onClick={interpret}
-          disabled={busy || text.trim().length === 0}
-          className="rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
-        >
-          {busy ? 'Reading…' : 'Interpret'}
-        </button>
-      </div>
-
-      {note && <p className="mt-2 text-sm text-amber-700">{note}</p>}
-
-      {draft && (
-        <div className="mt-3 rounded bg-gray-50 p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-            Draft — nothing is saved yet
-          </p>
-
-          <ul className="mt-2 flex flex-col gap-2">
-            {draft.map((row, i) => (
-              <li key={`${row.foodId}-${i}`} className="flex flex-wrap items-center gap-2 text-sm">
-                <input
-                  type="number"
-                  step={0.5}
-                  min={0.25}
-                  max={20}
-                  value={row.servings}
-                  onChange={(e) => update(i, { servings: Number(e.target.value) })}
-                  className="w-20 rounded border border-gray-300 px-2 py-1"
-                />
-                <span className="flex-1">
-                  {row.food.name}
-                  <span className="ml-2 text-gray-500">
-                    {Math.round(row.food.kcal * row.servings)} kcal
-                  </span>
-                </span>
-                <select
-                  value={row.mealSlot}
-                  onChange={(e) => update(i, { mealSlot: e.target.value as MealSlot })}
-                  className="rounded border border-gray-300 px-2 py-1"
-                >
-                  {MEAL_SLOTS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setDraft((p) => p?.filter((_, j) => j !== i) ?? null)}
-                  className="text-gray-400 hover:text-red-600"
-                  aria-label={`Remove ${row.food.name}`}
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={confirm}
-              disabled={busy || draft.length === 0}
-              className="rounded bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
-            >
-              Save {draft.length} {draft.length === 1 ? 'item' : 'items'}
-            </button>
-            <button
-              onClick={() => setDraft(null)}
-              className="rounded border border-gray-300 px-3 py-1.5 text-sm"
-            >
-              Discard
-            </button>
-          </div>
+    <Card>
+      <CardBody className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <IconSpark className="size-4 text-accent" />
+          <h2 className="text-sm font-semibold tracking-tight text-fg">
+            Or describe what you ate
+          </h2>
         </div>
-      )}
-    </section>
+        <p className="-mt-1 text-xs text-fg-muted">
+          Quantities read from text are approximate — you review the draft before anything saves.
+        </p>
+
+        <form
+          onSubmit={(e) => { e.preventDefault(); interpret() }}
+          className="flex flex-col gap-2 sm:flex-row"
+        >
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="two rotis, chicken curry and a glass of lassi"
+            aria-label="Describe what you ate"
+            className="flex-1"
+          />
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={busy || text.trim().length === 0}
+            className="shrink-0"
+          >
+            {busy && !draft ? <><Spinner /> Reading…</> : 'Interpret'}
+          </Button>
+        </form>
+
+        {note && <Notice tone="warning">{note}</Notice>}
+
+        {draft && (
+          <div className="animate-scale-in rounded-[var(--radius-control)] border border-accent/30 bg-accent-soft/40 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Badge tone="info">Draft — nothing saved yet</Badge>
+              <span className="tabular text-xs font-medium text-fg-muted">
+                {Math.round(draftKcal)} kcal total
+              </span>
+            </div>
+
+            <ul className="mt-3 flex flex-col gap-2">
+              {draft.map((row, i) => (
+                <li key={`${row.foodId}-${i}`} className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="number" inputMode="decimal" step={0.5} min={0.25} max={20}
+                    value={row.servings}
+                    onChange={(e) => update(i, { servings: Number(e.target.value) })}
+                    aria-label={`Servings of ${row.food.name}`}
+                    className="tabular h-9 w-16 rounded-[var(--radius-control)] border border-border-base bg-surface px-2 text-sm focus:border-accent focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/25"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+                    {row.food.name}
+                  </span>
+                  <select
+                    value={row.mealSlot}
+                    onChange={(e) => update(i, { mealSlot: e.target.value as MealSlot })}
+                    aria-label={`Meal for ${row.food.name}`}
+                    className="h-9 rounded-[var(--radius-control)] border border-border-base bg-surface px-2 text-sm focus:border-accent focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/25"
+                  >
+                    {MEAL_SLOTS.map((s) => (
+                      <option key={s} value={s}>{SLOT_LABEL[s]}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setDraft((p) => p?.filter((_, j) => j !== i) ?? null)}
+                    aria-label={`Remove ${row.food.name} from draft`}
+                    className="grid size-9 place-items-center rounded-md text-fg-subtle transition-colors hover:bg-surface hover:text-danger"
+                  >
+                    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-3.5 flex flex-wrap gap-2">
+              <Button size="sm" onClick={confirm} loading={busy} loadingText="Saving…" disabled={draft.length === 0}>
+                Save {draft.length} {draft.length === 1 ? 'item' : 'items'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
+                Discard
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardBody>
+    </Card>
   )
 }
