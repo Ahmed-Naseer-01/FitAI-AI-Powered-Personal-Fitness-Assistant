@@ -194,3 +194,24 @@ describe('fallbackDietPlan protein top-up', () => {
     }
   })
 })
+
+describe('fallbackDietPlan variant', () => {
+  it('returns a different plan for a different variant', () => {
+    const a = fallbackDietPlan(MENU, 2000, 0, 0)
+    const b = fallbackDietPlan(MENU, 2000, 0, 1)
+    expect(JSON.stringify(a.meals)).not.toBe(JSON.stringify(b.meals))
+  })
+
+  it('is still deterministic for a given variant', () => {
+    expect(fallbackDietPlan(MENU, 2000, 0, 5)).toEqual(fallbackDietPlan(MENU, 2000, 0, 5))
+  })
+
+  it('still only picks foods from the menu at any variant', () => {
+    const ids = new Set(MENU.map((m) => m.id))
+    for (const variant of [0, 1, 7, 42, 996]) {
+      for (const meal of fallbackDietPlan(MENU, 2000, 0, variant).meals) {
+        for (const item of meal.items) expect(ids.has(item.foodId)).toBe(true)
+      }
+    }
+  })
+})

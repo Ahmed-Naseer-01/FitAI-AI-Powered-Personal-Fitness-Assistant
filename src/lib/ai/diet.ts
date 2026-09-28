@@ -146,9 +146,14 @@ const SLOT_TEMPLATE: Record<MealSlot, string[]> = {
  * Deterministic pick from a category, varied by slot so that lunch and
  * dinner — which share a template — do not come out identical.
  */
-function pickForSlot(pool: MenuItem[], slotIndex: number, categoryIndex: number): MenuItem | null {
+function pickForSlot(
+  pool: MenuItem[],
+  slotIndex: number,
+  categoryIndex: number,
+  variant: number,
+): MenuItem | null {
   if (pool.length === 0) return null
-  return pool[(slotIndex * 3 + categoryIndex * 5) % pool.length]
+  return pool[(slotIndex * 3 + categoryIndex * 5 + variant) % pool.length]
 }
 
 /** Categories whose job is to carry protein, so they are chosen for it. */
@@ -170,7 +175,14 @@ const PROTEIN_SHORTLIST = 4
  * which is out of scope. The plan is still returned and still hits the
  * calorie target; the protein bar on screen simply reads under.
  */
-export function fallbackDietPlan(menu: MenuItem[], target: number, proteinMin = 0): PlanResult {
+export function fallbackDietPlan(
+  menu: MenuItem[],
+  target: number,
+  proteinMin = 0,
+  /** Shifts the rotation so pressing Regenerate offline returns a different
+   *  plan. Output stays deterministic for a given variant. */
+  variant = 0,
+): PlanResult {
   const byCategory = new Map<string, MenuItem[]>()
   for (const food of menu) {
     if (food.kcal <= 0) continue
@@ -205,7 +217,7 @@ export function fallbackDietPlan(menu: MenuItem[], target: number, proteinMin = 
       // Protein categories rotate only among the best few, so every meal
       // still carries real protein.
       const pool = PROTEIN_CATEGORIES.has(category) ? all.slice(0, PROTEIN_SHORTLIST) : all
-      const food = pickForSlot(pool, slotIndex, categoryIndex)
+      const food = pickForSlot(pool, slotIndex, categoryIndex, variant)
       if (!food) return
 
       const servings = Math.min(3, Math.max(0.5, Math.round((perCategory / food.kcal) * 2) / 2))
@@ -338,6 +350,8 @@ type GenerateArgs = {
   profileSummary: string
   onlySlot?: MealSlot
   slotBudget?: number
+  /** Passed to the fallback so repeated presses of Regenerate differ. */
+  variant?: number
 }
 
 function buildPrompt(args: GenerateArgs): string {
@@ -390,7 +404,7 @@ export async function generateDietPlan(args: GenerateArgs): Promise<PlanResult> 
     }
   }
 
-  const fallback = fallbackDietPlan(args.menu, args.target, args.proteinMin)
+  const fallback = fallbackDietPlan(args.menu, args.target, args.proteinMin, args.variant ?? 0)
   if (args.onlySlot) {
     return { meals: fallback.meals.filter((m) => m.slot === args.onlySlot), source: 'fallback' }
   }
