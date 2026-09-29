@@ -17,11 +17,22 @@ const MODEL_CHAIN = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']
 // Free-tier flash models are frequently overloaded. A transient 503 or 429
 // deserves a short wait and another try, not an immediate drop to the
 // deterministic fallback.
-const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504])
-// One retry per model. With a three-model chain that is at most six
-// requests and about 1.4s of waiting before the deterministic fallback
-// takes over — slow enough to ride out a blip, fast enough for a UI.
+// 429 is deliberately NOT here. The free tier's limit is 20 requests per day
+// PER MODEL, so retrying the same model cannot succeed and only burns the
+// deadline — but the next model in the chain has its own allowance.
+const TRANSIENT_STATUSES = new Set([500, 502, 503, 504])
+// One retry per model.
 const BACKOFF_MS = [700]
+
+// These two caps are what keep a slow provider from holding the UI hostage.
+// Measured against the live free tier, a single request to an overloaded
+// reasoning model took 47 seconds to return six tokens; six such attempts
+// made a plan take 86 seconds. Better to give up and plan offline.
+// A healthy call with a 60-food menu returns in roughly 6-10 seconds, so 10
+// is generous for one attempt and 15 bounds the whole exchange. Past that the
+// offline planner is a better answer than a longer spinner.
+const REQUEST_TIMEOUT_MS = 10_000
+const TOTAL_DEADLINE_MS = 15_000
 
 function models(): string[] {
   const override = (process.env.GEMINI_MODEL ?? '').trim()
@@ -50,17 +61,30 @@ type Args<T> = {
  * One logical request, retried on transient overload.
  * Returns parsed JSON, or null for any failure at all.
  */
-async function callOnce(prompt: string, jsonSchema: JsonSchema): Promise<unknown | null> {
+async function callOnce(
+  prompt: string,
+  jsonSchema: JsonSchema,
+  deadline: number,
+): Promise<unknown | null> {
   const key = (process.env.GEMINI_API_KEY ?? '').trim()
 
   for (const model of models()) {
     for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt += 1) {
-      const outcome = await attemptCall(key, model, prompt, jsonSchema)
+      if (Date.now() >= deadline) return null
+
+      // Never wait longer than the deadline allows, even on the first try.
+      const budget = Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now())
+      if (budget <= 0) return null
+
+      const outcome = await attemptCall(key, model, prompt, jsonSchema, budget)
       if (outcome.kind === 'ok') return outcome.value
       // A retired or unavailable model: move on to the next one immediately.
       if (outcome.kind === 'unavailable') break
       if (outcome.kind === 'fatal') return null
-      if (attempt < BACKOFF_MS.length) await sleep(BACKOFF_MS[attempt])
+
+      if (attempt < BACKOFF_MS.length && Date.now() + BACKOFF_MS[attempt] < deadline) {
+        await sleep(BACKOFF_MS[attempt])
+      }
     }
     // Every attempt on this model failed transiently; try the next model.
   }
@@ -79,11 +103,18 @@ async function attemptCall(
   model: string,
   prompt: string,
   jsonSchema: JsonSchema,
+  timeoutMs: number,
 ): Promise<Outcome> {
+  // An overloaded model can hold a connection open far longer than a user
+  // will wait, so abort rather than block.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
   let response: Response
   try {
     // The key goes in the query string, never the body.
     response = await fetch(`${endpoint(model)}?key=${encodeURIComponent(key)}`, {
+      signal: controller.signal,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -98,14 +129,17 @@ async function attemptCall(
       }),
     })
   } catch {
-    return { kind: 'transient' } // network blip, DNS, timeout
+    return { kind: 'transient' } // network blip, DNS, or our own abort
+  } finally {
+    clearTimeout(timer)
   }
 
   if (!response.ok) {
     if (TRANSIENT_STATUSES.has(response.status)) return { kind: 'transient' }
-    // 404 means the model is retired or not available to this key — the next
-    // model in the chain may well work. 400/403 never will.
-    if (response.status === 404) return { kind: 'unavailable' }
+    // 404: model retired or not available to this key.
+    // 429: this model's daily quota is gone.
+    // Either way the next model in the chain may still work. 400/403 never will.
+    if (response.status === 404 || response.status === 429) return { kind: 'unavailable' }
     return { kind: 'fatal' }
   }
 
@@ -140,9 +174,13 @@ export async function generateStructured<T>({
 }: Args<T>): Promise<T | null> {
   if (!isAiEnabled()) return null
 
+  // One deadline covers the whole exchange, corrective retry included, so a
+  // caller can promise the user a bounded wait.
+  const deadline = Date.now() + TOTAL_DEADLINE_MS
+
   // callOnce already handles transport failures, overload and the model
   // chain, so reaching null here means the provider is genuinely unusable.
-  const first = await callOnce(prompt, jsonSchema)
+  const first = await callOnce(prompt, jsonSchema, deadline)
   if (first === null) return null
 
   const parsed = zodSchema.safeParse(first)
@@ -155,7 +193,7 @@ export async function generateStructured<T>({
     ? retryPrompt(problem)
     : `${prompt}\n\nYour previous reply was rejected: ${problem}. Return valid JSON matching the schema exactly.`
 
-  const second = await callOnce(followUp, jsonSchema)
+  const second = await callOnce(followUp, jsonSchema, deadline)
   if (second === null) return null
 
   const retry = zodSchema.safeParse(second)

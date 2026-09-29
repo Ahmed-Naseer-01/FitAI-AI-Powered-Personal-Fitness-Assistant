@@ -53,6 +53,14 @@ export default async function DietPage() {
         </Notice>
       )}
 
+      {isAiEnabled() && plan?.source === 'fallback' && (
+        <Notice tone="warning">
+          The AI service did not respond, so this plan came from the built-in planner. The free
+          Gemini tier allows 20 requests per day per model — if you have been generating a lot,
+          try again tomorrow or add a different key.
+        </Notice>
+      )}
+
       {!plan ? (
         <EmptyState
           title="No plan for today yet"

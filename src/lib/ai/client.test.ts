@@ -243,7 +243,9 @@ describe('transient failure handling', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
   }, 15000)
 
-  it('retries a 429 rate limit', async () => {
+  it('moves to the next model on a 429 rather than retrying the exhausted one', async () => {
+    // The free tier's quota is per model per day, so a retry cannot succeed
+    // but the next model has its own allowance.
     vi.stubEnv('GEMINI_API_KEY', 'abc123')
     const fetchSpy = vi
       .fn()
@@ -254,7 +256,21 @@ describe('transient failure handling', () => {
     expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toEqual({
       answer: 3,
     })
+    expect(String(fetchSpy.mock.calls[1][0])).toContain('gemini-3.7-flash')
   }, 15000)
+
+  it('gives up quickly when every model is rate limited', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    const fetchSpy = vi.fn().mockResolvedValue(status(429))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const started = Date.now()
+    expect(await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })).toBeNull()
+
+    // One attempt per model, no backoff waits at all.
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+    expect(Date.now() - started).toBeLessThan(1000)
+  })
 
   it('gives up immediately on a 403, which will never succeed', async () => {
     vi.stubEnv('GEMINI_API_KEY', 'bad-key')
@@ -331,5 +347,51 @@ describe('transient failure handling', () => {
 
     await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })
     expect(String(fetchSpy.mock.calls[0][0])).toContain('gemini-3.8-flash')
+  })
+})
+
+describe('latency guards', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('aborts a request that hangs past the per-request timeout', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+
+    // A server that never responds until aborted.
+    const fetchSpy = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        }),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const started = Date.now()
+    const result = await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })
+    const elapsed = Date.now() - started
+
+    expect(result).toBeNull()
+    // Bounded by the total deadline, not by however long the server hangs.
+    expect(elapsed).toBeLessThan(28_000)
+  }, 40_000)
+
+  it('passes an abort signal on every request', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    const fetchSpy = vi.fn().mockResolvedValue(geminiReply('{"answer": 1}'))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })
+    expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('still returns fast when the provider is healthy', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'abc123')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(geminiReply('{"answer": 5}')))
+
+    const started = Date.now()
+    await generateStructured({ prompt: 'x', zodSchema: schema, jsonSchema })
+    expect(Date.now() - started).toBeLessThan(500)
   })
 })

@@ -36,13 +36,28 @@ guarantee, not a matter of the prompt being obeyed.
 Next.js 16 (App Router, TypeScript) · Prisma 6 + SQLite · Tailwind CSS v4 ·
 Zod · Recharts · MediaPipe Tasks JS · Google Gemini API · Vitest
 
-### Resilience
+### Resilience and the free-tier quota
 
-The free Gemini tier is frequently overloaded, so the client tries a chain of
-models and retries transient failures with backoff before giving up. A bad key
-or malformed request fails immediately, since retrying those cannot help. When
-every path fails, the deterministic planners take over — the application has
-no hard dependency on the provider being up.
+**The free Gemini tier allows 20 requests per day, per model.** Plan for that
+before a demo: generating a diet plan and a workout plan costs one request
+each when the service is healthy, and regenerating a single meal costs another.
+
+The client is built around that constraint and around the fact that free-tier
+models are often overloaded:
+
+- **A chain of three models.** The quota is per model, so when one is
+  exhausted (429) or retired (404) the client moves straight to the next
+  rather than retrying a request that cannot succeed.
+- **Hard timeouts.** 10 seconds per request, 15 seconds for the whole
+  exchange. An overloaded model once held a connection open for 47 seconds to
+  return six tokens; without a ceiling, a single plan took 86 seconds.
+- **Retries only where they help.** 5xx is retried once with backoff; 429,
+  404, 400 and 403 are not.
+- **A deterministic fallback behind everything.** When no model answers, the
+  built-in planners produce the plan and the page says so.
+
+Set `GEMINI_MODEL` in `.env` to pin a single model if you would rather not use
+the chain.
 
 **Privacy:** webcam frames are processed entirely in the browser and never
 leave the device. Only aggregate rep counts and form scores are transmitted.

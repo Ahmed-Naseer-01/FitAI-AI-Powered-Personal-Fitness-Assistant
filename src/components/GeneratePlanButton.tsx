@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui'
+import { Button, useSlowHint } from '@/components/ui'
 import { IconSpark } from '@/components/ui/icons'
 
 export default function GeneratePlanButton({ hasPlan }: { hasPlan: boolean }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const slow = useSlowHint(busy)
 
   async function generate() {
     setBusy(true)
@@ -21,9 +22,16 @@ export default function GeneratePlanButton({ hasPlan }: { hasPlan: boolean }) {
   }
 
   return (
-    <Button onClick={generate} loading={busy} loadingText="Generating…">
-      {!busy && <IconSpark className="size-4" />}
+    <div className="flex flex-col items-end gap-1.5">
+      <Button onClick={generate} loading={busy} loadingText="Generating…">
+        {!busy && <IconSpark className="size-4" />}
       {hasPlan ? 'Regenerate all' : 'Generate plan'}
-    </Button>
+      </Button>
+      {slow && (
+        <p role="status" className="animate-fade-in max-w-[14rem] text-right text-xs text-fg-muted">
+          The AI service is slow right now. We&apos;ll fall back to the built-in planner shortly.
+        </p>
+      )}
+    </div>
   )
 }

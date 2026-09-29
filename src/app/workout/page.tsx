@@ -52,6 +52,13 @@ export default async function WorkoutPage() {
         </Notice>
       )}
 
+      {isAiEnabled() && plan?.source === 'fallback' && (
+        <Notice tone="warning">
+          The AI service did not respond, so this plan came from the built-in template. The free
+          Gemini tier allows 20 requests per day per model.
+        </Notice>
+      )}
+
       {!plan ? (
         <EmptyState
           title="No plan for this week yet"
