@@ -62,20 +62,21 @@ the chain.
 **Privacy:** webcam frames are processed entirely in the browser and never
 leave the device. Only aggregate rep counts and form scores are transmitted.
 
-## Setup
+## Quick start
 
 ```bash
 npm install
-cp .env.example .env          # then set SESSION_SECRET
-npm run setup:model           # downloads the MediaPipe pose model (~5.5 MB)
-npm run db:push
-npm run db:seed
+cp .env.example .env                        # then set SESSION_SECRET
+openssl rand -base64 32                     # paste this into SESSION_SECRET
+npm run setup:model                         # MediaPipe pose model (~5.5 MB)
+npm run db:push && npm run db:seed
 npm run dev
 ```
 
 Open http://localhost:3000.
 
-Generate a session secret with `openssl rand -base64 32`.
+**[→ Full setup guide](SETUP.md)** — system requirements, every step, and
+troubleshooting.
 
 ### Optional: enable the AI features
 
@@ -181,5 +182,19 @@ src/components/  shared UI
 
 ## Documentation
 
-- Design specification: `docs/superpowers/specs/2026-09-29-fitai-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-09-29-fitai.md`
+| Document | Contents |
+|---|---|
+| **[Setup guide](SETUP.md)** | Requirements, installation, commands, troubleshooting |
+| **[Technical documentation](docs/DOCUMENTATION.md)** | Architecture, data model, algorithms, API reference, testing |
+| **[Project proposal](docs/PROPOSAL.md)** | Problem statement, objectives, scope, methodology, evaluation |
+| **[Deployment guide](docs/DEPLOYMENT.md)** | Vercel + Neon, Railway, and local options |
+| [Design specification](docs/superpowers/specs/2026-09-29-fitai-design.md) | The original design decisions |
+| [Implementation plan](docs/superpowers/plans/2026-09-29-fitai.md) | Task-by-task build plan |
+
+## Deployment
+
+The application deploys to Vercel with a managed Postgres database, or to
+Railway with SQLite on a persistent disk. The Prisma provider is derived from
+`DATABASE_URL` automatically, so there is only one schema file to maintain.
+
+**[→ Deployment guide](docs/DEPLOYMENT.md)**

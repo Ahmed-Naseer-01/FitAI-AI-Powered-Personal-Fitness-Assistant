@@ -14,7 +14,9 @@
     "db:demo": "tsx prisma/demo.ts",
     "db:reset": "rm -f prisma/dev.db && prisma db push && npm run db:seed",
     "db:studio": "prisma studio",
-    "setup:model": "mkdir -p public/models && curl -L -o public/models/pose_landmarker_lite.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+    "setup:model": "mkdir -p public/models && curl -L -o public/models/pose_landmarker_lite.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+    "db:provider": "node scripts/set-db-provider.mjs",
+    "vercel-build": "npm run setup:model && node scripts/set-db-provider.mjs && prisma generate && prisma db push --accept-data-loss && next build"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
